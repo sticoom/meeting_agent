@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-03-06",
+  "last_updated": "2026-03-06",
+  "style_preferences": {
+    "formal_level": "高",
+    "expression_style": "管理语言",
+    "length_preference": "适中"
+  },
+  "format_preferences": {
+    "use_tables": true,
+    "use_bold": true,
+    "use_numbering": true,
+    "table_columns": ["序号", "主要事项", "负责人", "截止日期", "状态"]
+  },
+  "focus_areas": [],
+  "modification_patterns": [],
+  "common_corrections": {},
+  "version": "1.0"
+}
