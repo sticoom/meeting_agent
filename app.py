@@ -552,9 +552,12 @@ def main():
                         if any(keyword in file.name.lower() for keyword in ['转写', '录音', '转录']):
                             # 这是录音转写文件
                             if file.name.endswith('.docx'):
-                                import io
-                                doc = Document(io.BytesIO(file.getvalue()))
-                                transcript_content = '\n'.join([p.text for p in doc.paragraphs])
+                                try:
+                                    doc = Document(io.BytesIO(file.getvalue()))
+                                    transcript_content = '\n'.join([p.text for p in doc.paragraphs])
+                                except Exception as e:
+                                    st.error(f"❌ 读取 .docx 文件失败: {e}")
+                                    transcript_content = ""
                             else:
                                 transcript_content = file.getvalue().decode('utf-8')
 
