@@ -549,23 +549,41 @@ def main():
                 if uploaded_files:
                     # 从上传的文件中读取
                     for file in uploaded_files:
-                        if any(keyword in file.name.lower() for keyword in ['转写', '录音', '转录']):
+                        file_name_lower = file.name.lower()
+
+                        # 检查是否是录音转写文件
+                        is_transcript = any(keyword in file_name_lower for keyword in ['转写', '录音', '转录'])
+
+                        st.info(f"📋 文件名: {file.name} (是否转写: {is_transcript})")
+
+                        if is_transcript:
                             # 这是录音转写文件
                             if file.name.endswith('.docx'):
                                 try:
                                     doc = Document(io.BytesIO(file.getvalue()))
-                                    transcript_content = '\n'.join([p.text for p in doc.paragraphs])
+                                    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                                    transcript_content = '\n'.join(paragraphs)
+                                    st.success(f"✅ 已读取 .docx 文件，共 {len(paragraphs)} 段")
                                 except Exception as e:
                                     st.error(f"❌ 读取 .docx 文件失败: {e}")
+                                    st.error(f"错误类型: {type(e).__name__}")
+                                    import traceback
+                                    st.error(f"详细错误: {traceback.format_exc()}")
                                     transcript_content = ""
                             else:
                                 transcript_content = file.getvalue().decode('utf-8')
+                                st.success(f"✅ 已读取文本文件，共 {len(transcript_content)} 字符")
 
                             st.success(f"✅ 已读取上传文件: {file.name}")
                             break  # 只取第一个转写文件
 
                     if not transcript_content:
-                        st.warning("⚠️ 未找到录音转写文件，请确保文件名包含'转写'、'录音'或'转录'")
+                        st.warning("⚠️ 未找到录音转写文件")
+                        st.info("请确保文件名包含以下关键词：'转写'、'录音'、'转录'")
+                        if uploaded_files:
+                            st.write("当前上传的文件：")
+                            for f in uploaded_files:
+                                st.write(f"- {f.name}")
                 else:
                     # 没有上传文件，尝试从 inputs/ 目录读取（本地模式）
                     inputs_dir = get_project_root() / "inputs"
@@ -607,6 +625,18 @@ def main():
                     '02_组织与术语词典.md': read_reference_file("02_组织与术语词典.md"),
                     '03_用户偏好.json': read_reference_file("03_用户偏好.json")
                 }
+
+                # 显示调试信息
+                st.markdown("---")
+                st.markdown("#### 📊 输入数据统计")
+                st.write(f"- **录音转写长度**: {len(transcript_content)} 字符")
+                st.write(f"- **手写重点长度**: {len(notes_content)} 字符")
+                st.write(f"- **历史总结长度**: {len(reference.get('01_历史纪要重点总结.md', ''))} 字符")
+                st.write(f"- **术语词典长度**: {len(reference.get('02_组织与术语词典.md', ''))} 字符")
+
+                if not transcript_content:
+                    st.error("⚠️ 录音转写内容为空！生成的会议纪要可能不完整")
+                    st.stop()
 
                 # 调用 GLM-4 API 生成会议纪要
                 client = GLMClient(api_key)
@@ -711,7 +741,6 @@ def main():
                 elif final_version.name.endswith('.txt'):
                     content = final_version.getvalue().decode('utf-8')
                 elif final_version.name.endswith('.docx'):
-                    import io
                     doc = Document(io.BytesIO(final_version.getvalue()))
                     content = '\n'.join([p.text for p in doc.paragraphs])
 
