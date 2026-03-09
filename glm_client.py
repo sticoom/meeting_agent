@@ -50,8 +50,8 @@ class GLMClient:
             print(f"📊 输入数据统计：")
             print(f"   - 录音转写: {len(transcript)} 字符")
             print(f"   - 手写重点: {len(notes)} 字符")
-            print(f"   - 历史总结: {len(summary)} 字符")
-            print(f"   - 术语词典: {len(dict_content)} 字符")
+            print(f"   - 历史总结: {len(reference.get('01_历史纪要重点总结.md', ''))} 字符")
+            print(f"   - 术语词典: {len(reference.get('02_组织与术语词典.md', ''))} 字符")
 
             payload = {
                 "model": "glm-4",
@@ -215,8 +215,8 @@ class GLMClient:
 ### 重要提示
 - 录音转写稿：{{transcript_len}} 字符，这是生成的主要依据
 - 手写重点：{{notes_len}} 字符，这是补充说明和优先级指引
-- 历史总结：共 {{len(summary)}} 字符，必须充分利用
-- 术语词典：共 {{len(dict_content)}} 字符，必须严格遵循
+- 历史总结：共 {{len(reference.get('01_历史纪要重点总结.md', ''))}} 字符，必须充分利用
+- 术语词典：共 {{len(reference.get('02_组织与术语词典.md', ''))}} 字符，必须严格遵循
 
 ### 核心任务
 1. 遵循五大板块结构（销售进度、思考疑惑、问题群策、计划启动、TODO事项）
