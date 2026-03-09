@@ -629,12 +629,59 @@ def main():
                     """)
                     st.stop()
 
-                # 读取 reference 文件
-                reference = {
-                    '01_历史纪要重点总结.md': read_reference_file("01_历史纪要重点总结.md"),
-                    '02_组织与术语词典.md': read_reference_file("02_组织与术语词典.md"),
-                    '03_用户偏好.json': read_reference_file("03_用户偏好.json")
-                }
+                # 读取 reference 文件（增加详细诊断）
+                reference = {}
+                ref_errors = []
+
+                # 读取历史总结
+                st.info("📖 正在读取 reference 文件...")
+                summary_content = read_reference_file("01_历史纪要重点总结.md")
+                if len(summary_content) > 0:
+                    reference['01_历史纪要重点总结.md'] = summary_content
+                    st.success(f"✅ 历史总结读取成功: {len(summary_content)} 字符")
+                else:
+                    ref_errors.append("01_历史纪要重点总结.md: 读取失败")
+                    st.error("❌ 历史总结读取失败，会议纪要可能无法参考历史风格")
+
+                # 读取术语词典
+                dict_content = read_reference_file("02_组织与术语词典.md")
+                if len(dict_content) > 0:
+                    reference['02_组织与术语词典.md'] = dict_content
+                    st.success(f"✅ 术语词典读取成功: {len(dict_content)} 字符")
+                else:
+                    ref_errors.append("02_组织与术语词典.md: 读取失败")
+                    st.error("❌ 术语词典读取失败，无法自动纠正错别字")
+
+                # 读取用户偏好（可选）
+                preferences_content = read_reference_file("03_用户偏好.json")
+                if len(preferences_content) > 0:
+                    reference['03_用户偏好.json'] = preferences_content
+
+                # 显示错误信息
+                if ref_errors:
+                    st.warning("⚠️ Reference 文件读取错误：")
+                    for error in ref_errors:
+                        st.write(f"   - {error}")
+
+                    st.warning("💡 可能的原因和解决方案：")
+                    st.markdown("""
+                    ### 1. GitHub Token 问题
+                    - Token 可能已失效或权限不足
+                    - 请访问：https://github.com/settings/tokens
+                    - 重新生成 Token，确保勾选 `repo` 权限
+
+                    ### 2. GitHub 仓库配置问题
+                    - 请确认 GITHUB_OWNER 和 GITHUB_REPO 正确
+                    - 仓库必须设置为公开（Public）
+
+                    ### 3. 本地文件缺失（回退方案）
+                    - 如果 GitHub 读取失败，系统会自动尝试读取本地文件
+                    - 请确保本地 `reference/` 目录存在且有内容
+
+                    ### 4. 网络连接问题
+                    - Streamlit Cloud 可能无法访问 GitHub API
+                    - 请检查网络连接
+                    """)
 
                 # 显示调试信息
                 st.markdown("---")
