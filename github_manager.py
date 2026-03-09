@@ -43,7 +43,7 @@ class GitHubManager:
         url = f"{self.base_url}/contents/{path}"
 
         try:
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self.headers, timeout=10)
 
             if response.status_code == 404:
                 return None
@@ -54,12 +54,23 @@ class GitHubManager:
             # 解码 base64 内容
             content = data.get('content', '')
             if content:
-                return base64.b64decode(content).decode('utf-8')
+                decoded = base64.b64decode(content).decode('utf-8')
+                print(f"✅ GitHub 读取成功: {path} ({len(decoded)} 字符)")
+                return decoded
 
+            print(f"⚠️ GitHub 文件存在但内容为空: {path}")
             return None
 
+        except requests.exceptions.Timeout:
+            print(f"⏱️ GitHub API 超时 [{path}]")
+            return None
+        except requests.exceptions.HTTPError as e:
+            print(f"❌ GitHub HTTP 错误 [{path}]: {e}")
+            print(f"   HTTP 状态码: {e.response.status_code if e.response else '未知'}")
+            return None
         except Exception as e:
-            print(f"获取文件失败 [{path}]: {e}")
+            print(f"❌ GitHub API 调用失败 [{path}]: {type(e).__name__}")
+            print(f"   错误详情: {e}")
             return None
 
     def update_file(self, path: str, content: str, message: str) -> bool:
@@ -150,6 +161,7 @@ class GitHubManager:
         Returns:
             {文件名: 文件内容}
         """
+        print("📖 开始获取 reference 文件...")
         files = {}
         reference_files = [
             "reference/01_历史纪要重点总结.md",
@@ -158,10 +170,15 @@ class GitHubManager:
         ]
 
         for file_path in reference_files:
+            print(f"   正在读取: {file_path}")
             content = self.get_file(file_path)
             if content:
                 files[file_path] = content
+                print(f"   ✅ 读取成功: {file_path} ({len(content)} 字符)")
+            else:
+                print(f"   ❌ 读取失败: {file_path}")
 
+        print(f"📊 Reference 文件统计: {len(files)} 个成功, {3 - len(files)} 个失败")
         return files
 
     def update_reference_file(self, file_name: str, content: str, message: str) -> bool:
@@ -214,12 +231,28 @@ def create_github_manager(st) -> Optional[GitHubManager]:
         owner = st.secrets.get("GITHUB_OWNER")
         repo = st.secrets.get("GITHUB_REPO")
 
+        # 验证配置完整性
         if not all([token, owner, repo]):
+            print("⚠️ GitHub 配置不完整:")
+            if not token:
+                print("   - GITHUB_TOKEN: 未设置")
+            if not owner:
+                print("   - GITHUB_OWNER: 未设置")
+            if not repo:
+                print("   - GITHUB_REPO: 未设置")
             return None
+
+        # 验证 token 格式
+        if token and not token.startswith(('github_pat_', 'ghp_', 'gho_', 'ghu_')):
+            print(f"⚠️ GitHub Token 格式可能不正确: {token[:10]}...")
+            print("   Token 应该以 'github_pat_' 或 'ghp_' 开头")
+
+        print(f"✅ GitHub 配置验证通过: {owner}/{repo}")
 
         return GitHubManager(token, owner, repo)
 
     except Exception as e:
+        print(f"❌ GitHub 管理器初始化失败: {e}")
         return None
 
 

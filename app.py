@@ -151,11 +151,21 @@ def read_reference_file(file_name: str) -> str:
     if github_mgr:
         content = github_mgr.get_file(f"reference/{file_name}")
         if content:
+            print(f"✅ 从 GitHub 读取成功: {file_name} ({len(content)} 字符)")
             return content
+        else:
+            print(f"⚠️ GitHub 读取失败，回退到本地: {file_name}")
 
     # 回退到本地读取
     local_path = get_project_root() / "reference" / file_name
-    return read_file(local_path) or ""
+    content = read_file(local_path) or ""
+
+    if content:
+        print(f"✅ 从本地读取成功: {file_name} ({len(content)} 字符)")
+    else:
+        print(f"⚠️ 本地读取失败: {file_name}")
+
+    return content
 
 
 def write_reference_file(file_name: str, content: str, message: str) -> bool:
@@ -629,10 +639,29 @@ def main():
                 # 显示调试信息
                 st.markdown("---")
                 st.markdown("#### 📊 输入数据统计")
+
+                # 显示 GitHub 模式状态
+                github_mgr = create_github_manager(st)
+                is_github_mode = github_mgr is not None
+
+                if is_github_mode:
+                    st.success(f"🌐 **GitHub Cloud 模式** - 数据来源：GitHub 仓库 {github_mgr.owner}/{github_mgr.repo}")
+                else:
+                    st.info(f"📁 **本地文件模式** - 数据来源：本地 reference/ 目录")
+
+                st.markdown("")
+
+                # 显示输入数据统计
                 st.write(f"- **录音转写长度**: {len(transcript_content)} 字符")
                 st.write(f"- **手写重点长度**: {len(notes_content)} 字符")
                 st.write(f"- **历史总结长度**: {len(reference.get('01_历史纪要重点总结.md', ''))} 字符")
                 st.write(f"- **术语词典长度**: {len(reference.get('02_组织与术语词典.md', ''))} 字符")
+
+                # 添加警告提示
+                if len(reference.get('01_历史纪要重点总结.md', '')) == 0:
+                    st.warning("⚠️ 历史总结长度为 0，会议纪要可能无法参考历史风格")
+                if len(reference.get('02_组织与术语词典.md', '')) == 0:
+                    st.warning("⚠️ 术语词典长度为 0，无法自动纠正错别字")
 
                 if not transcript_content:
                     st.error("⚠️ 录音转写内容为空！生成的会议纪要可能不完整")

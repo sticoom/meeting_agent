@@ -46,6 +46,13 @@ class GLMClient:
 
         # 调用 API
         try:
+            print(f"🚀 开始调用 GLM-4 API...")
+            print(f"📊 输入数据统计：")
+            print(f"   - 录音转写: {len(transcript)} 字符")
+            print(f"   - 手写重点: {len(notes)} 字符")
+            print(f"   - 历史总结: {len(summary)} 字符")
+            print(f"   - 术语词典: {len(dict_content)} 字符")
+
             payload = {
                 "model": "glm-4",
                 "messages": [
@@ -64,23 +71,35 @@ class GLMClient:
                 timeout=120  # 2分钟超时
             )
 
+            print(f"   API 请求已发送，等待响应...")
             response.raise_for_status()
             result = response.json()
 
+            print(f"   API 响应状态码: {response.status_code}")
+
             # 提取生成的内容
             if 'choices' in result and len(result['choices']) > 0:
-                return result['choices'][0]['message']['content']
+                content = result['choices'][0]['message']['content']
+                print(f"✅ API 调用成功，生成 {len(content)} 字符")
+                return content
 
+            print(f"❌ API 响应格式错误: {result}")
             return None
 
         except requests.exceptions.Timeout:
-            print("GLM-4 API 请求超时")
+            print("⏱️ GLM-4 API 请求超时（2分钟）")
+            return None
+        except requests.exceptions.HTTPError as e:
+            print(f"❌ GLM-4 API HTTP 错误: {e}")
+            print(f"   HTTP 状态码: {e.response.status_code if e.response else '未知'}")
+            print(f"   响应内容: {e.response.text[:500] if e.response else '无'}")
             return None
         except requests.exceptions.RequestException as e:
-            print(f"GLM-4 API 请求失败: {e}")
+            print(f"❌ GLM-4 API 请求异常: {e}")
             return None
         except Exception as e:
-            print(f"GLM-4 API 调用出错: {e}")
+            print(f"❌ GLM-4 API 调用出错: {e}")
+            print(f"   错误类型: {type(e).__name__}")
             return None
 
     def _build_system_prompt(self, reference: Dict[str, str]) -> str:
@@ -99,48 +118,71 @@ class GLMClient:
 
         prompt = f"""你是总裁办资深董秘，负责生成管理层周例会纪要。
 
-## 核心要求
+## ⚠️ 重要要求（必须严格遵守）
 
-1. **严格按照 skill.md 中的规范生成纪要**
-2. **冷总发言优先处理**：
-   - 完整保留所有观点、指示、总结
-   - 严格去口语化（那个、话说、搞一下、弄一下等）
-   - 保持原始逻辑顺序
-   - 保留商业哲理（平衡变量、回到现场、商人思维等）
+### 1. 必须完整利用历史参考
+- 历史总结：共 {len(summary)} 字符，必须仔细阅读并遵循
+- 术语词典：共 {len(dict_content)} 字符，必须用于纠正错别字
+- 用户偏好：共 {len(preferences)} 字符，请参考用户习惯
 
-3. **术语纠正**：对照术语词典，纠正机器转写的错别字
+### 2. 核心生成要求
 
-4. **存疑高亮机制**：对于金额、日期、责任人模糊不清的信息，使用 **[待确认：具体内容]** 标注，绝对不准瞎编
+#### 2.1 五大板块结构（必须按此顺序）
+1. 每周销售进度发会议群，会上沟通销售端存在的问题及需求
+2. 上周看到的人和事带给自己的思考或疑惑
+3. 目前工作遇到问题需要大家群策群力的
+4. 计划启动的工作需要大家提前知悉或进行意见征询的
+5. TODO事项（必含表格：序号、主要事项、负责人、截止日期、状态）
 
-5. **五大板块结构**：
-   - 每周销售进度发会议群，会上沟通销售端存在的问题及需求
-   - 上周看到的人和事带给自己的思考或疑惑
-   - 目前工作遇到问题需要大家群策群力的
-   - 计划启动的工作需要大家提前知悉或进行意见征询的
-   - TODO事项（必含表格：序号、主要事项、负责人、截止日期、状态）
+#### 2.2 冷总发言处理（最高优先级）
+- 完整保留所有观点、指示、总结（不得遗漏）
+- 严格去口语化（删除：那个、话说、搞一下、弄一下、话说白了、就是这样、也就是说、挺、有点、嘛、哦、哈哈哈）
+- 保持原始逻辑顺序（不得重新排序或重组）
+- 保留商业哲理（平衡变量、回到现场、商人思维等）
 
-6. **最后一行必须是**：**撰写人：倩文**
+#### 2.3 术语纠正（必须执行）
+- 对照术语词典，纠正所有发现的错别字
+- 示例：刚哥→Alter、发必达→FBA、湖南系统→图南系统
 
-## 历史参考
+#### 2.4 存疑高亮机制（绝对禁止）
+- 金额、日期、具体责任人、重要数据模糊时：使用 **[待确认：XXX]**
+- 宁可留空，也不得编造
+- 示例：**[待确认：具体责任人]** 负责此事项
 
-### 历史纪要重点总结（最近要点）
-{summary[:2000] if summary else '暂无历史总结'}
+#### 2.5 去口语化（全文执行）
+- 使用正式管理语言
+- 删除所有口语化表达和填充词
 
-### 术语词典（纠正规则）
-{dict_content[:2000] if dict_content else '暂无术语词典'}
-
-### 用户偏好
-{preferences[:500] if preferences else '暂无用户偏好'}
-
-## 输出格式要求
-
-- 使用 Markdown 格式
+#### 2.6 逻辑分层
 - 复杂逻辑使用 1. 2. 3. 递进
+- 使用清晰的层级结构
+
+#### 2.7 格式规范
+- 使用 Markdown 格式
 - 表格使用标准 Markdown 表格格式
 - 加粗使用 **文本**
-- 最后一行另起一行，加粗写上：**撰写人：倩文**
+- 主语明确（所有 Action Items 必须有责任人）
 
-请严格按照以上要求生成会议纪要。"""
+#### 2.8 最后一行（必须）
+- 另起一行，加粗写上：**撰写人：倩文**
+- 不得有任何其他内容或修饰
+
+### 3. 数据准确性要求
+- 销售数据：必须明确销售额达成率、毛利额达成率、毛利率
+- 时间节点：所有事项必须有明确截止日期（格式：YYYY-MM-DD）
+- 责任归属：每项行动项必须有明确责任人
+- 产品信息：产品名称、品类、数量必须准确
+
+### 4. 质量控制
+生成前自检：
+- 是否完整保留了冷总的所有发言？
+- 是否已完成术语纠正？
+- 是否对模糊信息使用了存疑高亮？
+- 五大板块结构是否完整？
+- TODO 事项表格是否完整（序号、主要事项、负责人、截止日期、状态）？
+- 最后一行格式是否正确？
+
+## 请根据以上资料和要求生成会议纪要。"""
         return prompt
 
     def _build_user_message(self, transcript: str, notes: str) -> str:
@@ -154,26 +196,45 @@ class GLMClient:
         Returns:
             用户消息
         """
+        # 计算输入数据的长度
+        transcript_len = len(transcript) if transcript else 0
+        notes_len = len(notes) if notes else 0
+
         message = f"""## 会议资料
 
 ### 录音转写稿
-{transcript}
+{transcript if transcript else '（暂无录音转写稿）'}
+**字数：{transcript_len} 字符**
 
 ### 手写重点
-{notes if notes else '（无手写重点）'}
+{notes if notes else '（暂无手写重点）'}
+**字数：{notes_len} 字符**
 
-## 要求
+## 生成要求
 
-请根据以上资料生成符合规范的《管理层周例会纪要》。
-- 参考历史纪要的风格和格式
-- 使用术语词典纠正错别字
-- 严格去口语化
-- 冷总发言要完整保留，去口语化，保持逻辑顺序
-- 对模糊信息使用存疑高亮
-- 必须包含五大板块和 TODO 事项表格
-- 最后一行必须是：**撰写人：倩文**
+### 重要提示
+- 录音转写稿：{transcript_len} 字符，这是生成的主要依据
+- 手写重点：{notes_len} 字符，这是补充说明和优先级指引
+- 历史总结：共 {len(summary)} 字符，必须充分利用
+- 术语词典：共 {len(dict_content)} 字符，必须严格遵循
 
-现在开始生成会议纪要。"""
+### 核心任务
+1. 遵循五大板块结构（销售进度、思考疑惑、问题群策、计划启动、TODO事项）
+2. 严格去口语化（删除所有口语化表达）
+3. 纠正所有发现的错别字（使用术语词典）
+4. 对模糊信息使用存疑高亮 **[待确认：XXX]**
+5. 冷总发言：完整保留、去口语化、保持逻辑顺序
+6. 主语明确（所有行动项必须有责任人）
+7. TODO 表格完整（序号、主要事项、负责人、截止日期、状态）
+8. 最后一行必须是：**撰写人：倩文**
+
+## 输出质量要求
+- 结构清晰，逻辑连贯
+- 数据准确，不编造
+- 格式规范，Markdown 标准
+- 充分利用历史参考的风格和格式
+
+现在请严格按照以上要求生成完整的会议纪要。"""
         return message
 
     def test_connection(self) -> bool:
