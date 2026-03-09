@@ -204,19 +204,19 @@ class GLMClient:
 
 ### 录音转写稿
 {transcript if transcript else '（暂无录音转写稿）'}
-**字数：{transcript_len} 字符**
+**字数：{{transcript_len}} 字符**
 
 ### 手写重点
 {notes if notes else '（暂无手写重点）'}
-**字数：{notes_len} 字符**
+**字数：{{notes_len}} 字符**
 
 ## 生成要求
 
 ### 重要提示
-- 录音转写稿：{transcript_len} 字符，这是生成的主要依据
-- 手写重点：{notes_len} 字符，这是补充说明和优先级指引
-- 历史总结：共 {len(summary)} 字符，必须充分利用
-- 术语词典：共 {len(dict_content)} 字符，必须严格遵循
+- 录音转写稿：{{transcript_len}} 字符，这是生成的主要依据
+- 手写重点：{{notes_len}} 字符，这是补充说明和优先级指引
+- 历史总结：共 {{len(summary)}} 字符，必须充分利用
+- 术语词典：共 {{len(dict_content)}} 字符，必须严格遵循
 
 ### 核心任务
 1. 遵循五大板块结构（销售进度、思考疑惑、问题群策、计划启动、TODO事项）
