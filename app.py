@@ -153,6 +153,20 @@ def read_reference_file(file_name: str) -> str:
         if content:
             print(f"✅ 从 GitHub 读取成功: {file_name} ({len(content)} 字符)")
             return content
+        else:
+            print(f"⚠️ GitHub 读取失败，回退到本地: {file_name}")
+
+    # 回退到本地读取
+    local_path = get_project_root() / "reference" / file_name
+    content = read_file(local_path) or ""
+
+    if content:
+        print(f"✅ 从本地读取成功: {file_name} ({len(content)} 字符)")
+    else:
+        print(f"⚠️ 本地读取失败: {file_name}")
+
+    return content
+
 
 def read_reference_file_no_prefix(file_name: str) -> str:
     """
@@ -180,19 +194,6 @@ def read_reference_file_no_prefix(file_name: str) -> str:
             print(f"✅ 从本地读取成功（reference路径）: {file_name} ({len(content)} 字符)")
         else:
             print(f"⚠️ 本地读取失败（两种路径都失败）: {file_name}")
-
-    return content
-        else:
-            print(f"⚠️ GitHub 读取失败，回退到本地: {file_name}")
-
-    # 回退到本地读取
-    local_path = get_project_root() / "reference" / file_name
-    content = read_file(local_path) or ""
-
-    if content:
-        print(f"✅ 从本地读取成功: {file_name} ({len(content)} 字符)")
-    else:
-        print(f"⚠️ 本地读取失败: {file_name}")
 
     return content
 
