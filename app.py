@@ -712,7 +712,6 @@ def main():
                     content = final_version.getvalue().decode('utf-8')
                 elif final_version.name.endswith('.docx'):
                     import io
-                    from docx import Document
                     doc = Document(io.BytesIO(final_version.getvalue()))
                     content = '\n'.join([p.text for p in doc.paragraphs])
 
