@@ -153,6 +153,35 @@ def read_reference_file(file_name: str) -> str:
         if content:
             print(f"✅ 从 GitHub 读取成功: {file_name} ({len(content)} 字符)")
             return content
+
+def read_reference_file_no_prefix(file_name: str) -> str:
+    """
+    读取 reference 文件（不带 reference/ 前缀，兼容根目录结构）
+
+    Args:
+        file_name: 文件名（如 "01_历史纪要重点总结.md"）
+
+    Returns:
+        文件内容
+    """
+    # 先尝试直接读取（根目录）
+    local_path = get_project_root() / file_name
+    content = read_file(local_path) or ""
+
+    if content:
+        print(f"✅ 从本地读取成功（直接路径）: {file_name} ({len(content)} 字符)")
+        return content
+
+    # 如果直接读取失败，尝试从 reference/ 目录读取
+    if not content:
+        reference_path = get_project_root() / "reference" / file_name
+        content = read_file(reference_path) or ""
+        if content:
+            print(f"✅ 从本地读取成功（reference路径）: {file_name} ({len(content)} 字符)")
+        else:
+            print(f"⚠️ 本地读取失败（两种路径都失败）: {file_name}")
+
+    return content
         else:
             print(f"⚠️ GitHub 读取失败，回退到本地: {file_name}")
 
@@ -629,19 +658,49 @@ def main():
                     """)
                     st.stop()
 
-                # 读取 reference 文件（增加详细诊断）
+                # 读取 reference 文件（增强双重路径支持）
                 reference = {}
                 ref_errors = []
 
-                # 读取历史总结
+                # 读取历史总结（尝试两种路径）
                 st.info("📖 正在读取 reference 文件...")
-                summary_content = read_reference_file("01_历史纪要重点总结.md")
-                if len(summary_content) > 0:
-                    reference['01_历史纪要重点总结.md'] = summary_content
-                    st.success(f"✅ 历史总结读取成功: {len(summary_content)} 字符")
+                summary_content_github = read_reference_file("01_历史纪要重点总结.md")
+                summary_content_direct = read_reference_file_no_prefix("01_历史纪要重点总结.md")
+
+                # 优先使用成功的读取
+                if len(summary_content_github) > 0:
+                    reference['01_历史纪要重点总结.md'] = summary_content_github
+                    st.success(f"✅ 历史总结读取成功（GitHub）: {len(summary_content_github)} 字符")
+                elif len(summary_content_direct) > 0:
+                    reference['01_历史纪要重点总结.md'] = summary_content_direct
+                    st.success(f"✅ 历史总结读取成功（直接）: {len(summary_content_direct)} 字符")
                 else:
                     ref_errors.append("01_历史纪要重点总结.md: 读取失败")
                     st.error("❌ 历史总结读取失败，会议纪要可能无法参考历史风格")
+                    st.info("💡 文件位置可能是：reference/01_历史纪要重点总结.md 或 01_历史纪要重点总结.md")
+
+                # 读取术语词典（尝试两种路径）
+                dict_content_github = read_reference_file("02_组织与术语词典.md")
+                dict_content_direct = read_reference_file_no_prefix("02_组织与术语词典.md")
+
+                if len(dict_content_github) > 0:
+                    reference['02_组织与术语词典.md'] = dict_content_github
+                    st.success(f"✅ 术语词典读取成功（GitHub）: {len(dict_content_github)} 字符")
+                elif len(dict_content_direct) > 0:
+                    reference['02_组织与术语词典.md'] = dict_content_direct
+                    st.success(f"✅ 术语词典读取成功（直接）: {len(dict_content_direct)} 字符")
+                else:
+                    ref_errors.append("02_组织与术语词典.md: 读取失败")
+                    st.error("❌ 术语词典读取失败，无法自动纠正错别字")
+
+                # 读取用户偏好
+                preferences_content = read_reference_file("03_用户偏好.json")
+                if preferences_content:
+                    reference['03_用户偏好.json'] = preferences_content
+                    st.success(f"✅ 用户偏好读取成功: {len(preferences_content)} 字符")
+                else:
+                    # 用户偏好是可选的，不报错
+                    reference['03_用户偏好.json'] = '{}'
 
                 # 读取术语词典
                 dict_content = read_reference_file("02_组织与术语词典.md")
