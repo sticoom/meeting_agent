@@ -540,50 +540,61 @@ def main():
                     st.error("❌ 未配置 GLM-4 API Key，请在侧边栏输入")
                     st.stop()
 
-                # 读取 inputs/ 目录中的文件
-                inputs_dir = get_project_root() / "inputs"
+                # 优先使用上传的文件，如果没有才读取 inputs/ 目录
                 transcript_content = ""
-                notes_content = ""
+                notes_content = handwritten_notes  # 使用文本框输入的手写重点
 
-                # 自动查找最新的文件
-                if inputs_dir.exists():
-                    files = list(inputs_dir.glob('*'))
+                # 优先处理上传的文件
+                if uploaded_files:
+                    # 从上传的文件中读取
+                    for file in uploaded_files:
+                        if any(keyword in file.name.lower() for keyword in ['转写', '录音', '转录']):
+                            # 这是录音转写文件
+                            if file.name.endswith('.docx'):
+                                import io
+                                doc = Document(io.BytesIO(file.getvalue()))
+                                transcript_content = '\n'.join([p.text for p in doc.paragraphs])
+                            else:
+                                transcript_content = file.getvalue().decode('utf-8')
 
-                    # 优先找录音转写文件
-                    transcript_files = [f for f in files if any(
-                        keyword in f.name.lower()
-                        for keyword in ['转写', '录音', '转录']
-                    ) and f.suffix in ['.docx', '.txt', '.md']]
+                            st.success(f"✅ 已读取上传文件: {file.name}")
+                            break  # 只取第一个转写文件
 
-                    if transcript_files:
-                        # 按修改时间排序，取最新的
-                        transcript_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                        latest_transcript = transcript_files[0]
+                    if not transcript_content:
+                        st.warning("⚠️ 未找到录音转写文件，请确保文件名包含'转写'、'录音'或'转录'")
+                else:
+                    # 没有上传文件，尝试从 inputs/ 目录读取（本地模式）
+                    inputs_dir = get_project_root() / "inputs"
 
-                        if latest_transcript.suffix == '.docx':
-                            transcript_content = read_docx(latest_transcript)
-                        else:
-                            transcript_content = read_file(latest_transcript) or ""
+                    if inputs_dir.exists():
+                        files = list(inputs_dir.glob('*'))
 
-                        st.success(f"✅ 已读取转写文件: {latest_transcript.name}")
+                        # 优先找录音转写文件
+                        transcript_files = [f for f in files if any(
+                            keyword in f.name.lower()
+                            for keyword in ['转写', '录音', '转录']
+                        ) and f.suffix in ['.docx', '.txt', '.md']]
 
-                    # 找手写重点文件
-                    notes_files = [f for f in files if any(
-                        keyword in f.name.lower()
-                        for keyword in ['手写', '重点', '粗糙']
-                    ) and f.suffix in ['.txt', '.md']]
+                        if transcript_files:
+                            # 按修改时间排序，取最新的
+                            transcript_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                            latest_transcript = transcript_files[0]
 
-                    if notes_files:
-                        notes_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                        latest_notes = notes_files[0]
-                        notes_content = read_file(latest_notes) or ""
+                            if latest_transcript.suffix == '.docx':
+                                transcript_content = read_docx(latest_transcript)
+                            else:
+                                transcript_content = read_file(latest_transcript) or ""
 
-                        if notes_content:
-                            st.success(f"✅ 已读取手写重点: {latest_notes.name}")
+                            st.success(f"✅ 已读取本地文件: {latest_transcript.name}")
 
                 if not transcript_content and not notes_content:
-                    st.error("❌ inputs/ 目录中没有找到会议文件")
-                    st.info("请确保已上传以下文件：\n- 录音转写文件（.docx 或 .txt）\n- 手写重点文件（.txt）")
+                    st.error("❌ 未找到会议文件")
+                    st.info("""
+                    请确保：
+                    1. **Streamlit Cloud**: 在「📁 文件上传区」上传了录音转写文件
+                    2. **本地运行**: 将会议文件放入 inputs/ 目录
+                    3. 在「✍️ 手写重点输入」输入了手写重点（可选）
+                    """)
                     st.stop()
 
                 # 读取 reference 文件
