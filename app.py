@@ -15,6 +15,9 @@ from docx.shared import Inches
 # GitHub 管理模块
 from github_manager import GitHubManager, create_github_manager, is_github_mode
 
+# GLM-4 客户端
+from glm_client import GLMClient, create_glm_client
+
 # 页面配置
 st.set_page_config(
     page_title="会议纪要生成 Agent",
@@ -316,6 +319,43 @@ def main():
 
         st.markdown("---")
 
+        # GLM-4 API 配置
+        st.markdown("### 🤖 GLM-4 API")
+
+        # 尝试从 secrets 读取 API Key
+        api_key = st.secrets.get("GLM_API_KEY", "")
+
+        if not api_key:
+            # 如果 secrets 中没有，从 session state 读取或让用户输入
+            if "glm_api_key" not in st.session_state:
+                st.session_state.glm_api_key = ""
+
+            api_key = st.text_input(
+                "API Key",
+                type="password",
+                value=st.session_state.glm_api_key,
+                key="glm_api_key_input",
+                help="智谱 GLM-4 API 密钥"
+            )
+
+            if api_key:
+                st.session_state.glm_api_key = api_key
+        else:
+            st.success("✅ API Key 已从 Secrets 加载")
+
+        # 测试连接按钮
+        if st.button("🔍 测试 API 连接"):
+            if api_key:
+                client = GLMClient(api_key)
+                if client.test_connection():
+                    st.success("✅ API 连接成功！")
+                else:
+                    st.error("❌ API 连接失败，请检查 API Key")
+            else:
+                st.warning("⚠️ 请先输入 API Key")
+
+        st.markdown("---")
+
         # 术语词典快捷添加
         st.markdown("### 📖 术语词典")
 
@@ -493,57 +533,99 @@ def main():
 
         if generate_button:
             with st.spinner("正在生成会议纪要，请稍候..."):
-                # 这里应该调用 Claude API 生成会议纪要
-                # 由于没有实际的 API 集成，这里演示逻辑
-                st.success("✅ 会议纪要生成成功！")
+                # 获取 API Key
+                api_key = st.secrets.get("GLM_API_KEY", st.session_state.get("glm_api_key", ""))
 
-                # 保存到 session state
-                if not st.session_state.get("generated_content"):
-                    st.session_state.generated_content = ""
-                st.session_state.generated_content = f"""# 管理层周例会纪要
+                if not api_key:
+                    st.error("❌ 未配置 GLM-4 API Key，请在侧边栏输入")
+                    st.stop()
 
-**会议日期：** {datetime.now().strftime('%Y年%m月%d日')}
-**生成时间：** {datetime.now().strftime('%H:%M:%S')}
+                # 读取 inputs/ 目录中的文件
+                inputs_dir = get_project_root() / "inputs"
+                transcript_content = ""
+                notes_content = ""
 
----
+                # 自动查找最新的文件
+                if inputs_dir.exists():
+                    files = list(inputs_dir.glob('*'))
 
-## 一、每周销售进度发会议群，会上沟通销售端存在的问题及需求
+                    # 优先找录音转写文件
+                    transcript_files = [f for f in files if any(
+                        keyword in f.name.lower()
+                        for keyword in ['转写', '录音', '转录']
+                    ) and f.suffix in ['.docx', '.txt', '.md']]
 
-{handwritten_notes if handwritten_notes else "（根据上传文件自动生成销售进度内容）"}
+                    if transcript_files:
+                        # 按修改时间排序，取最新的
+                        transcript_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                        latest_transcript = transcript_files[0]
 
----
+                        if latest_transcript.suffix == '.docx':
+                            transcript_content = read_docx(latest_transcript)
+                        else:
+                            transcript_content = read_file(latest_transcript) or ""
 
-## 二、上周看到的人和事带给自己的思考或疑惑
+                        st.success(f"✅ 已读取转写文件: {latest_transcript.name}")
 
-（根据上传文件自动生成内容）
+                    # 找手写重点文件
+                    notes_files = [f for f in files if any(
+                        keyword in f.name.lower()
+                        for keyword in ['手写', '重点', '粗糙']
+                    ) and f.suffix in ['.txt', '.md']]
 
----
+                    if notes_files:
+                        notes_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                        latest_notes = notes_files[0]
+                        notes_content = read_file(latest_notes) or ""
 
-## 三、目前工作遇到问题需要大家群策群力的
+                        if notes_content:
+                            st.success(f"✅ 已读取手写重点: {latest_notes.name}")
 
-（根据上传文件自动生成内容）
+                if not transcript_content and not notes_content:
+                    st.error("❌ inputs/ 目录中没有找到会议文件")
+                    st.info("请确保已上传以下文件：\n- 录音转写文件（.docx 或 .txt）\n- 手写重点文件（.txt）")
+                    st.stop()
 
----
+                # 读取 reference 文件
+                reference = {
+                    '01_历史纪要重点总结.md': read_reference_file("01_历史纪要重点总结.md"),
+                    '02_组织与术语词典.md': read_reference_file("02_组织与术语词典.md"),
+                    '03_用户偏好.json': read_reference_file("03_用户偏好.json")
+                }
 
-## 四、计划启动的工作需要大家提前知悉或进行意见征询的
+                # 调用 GLM-4 API 生成会议纪要
+                client = GLMClient(api_key)
 
-（根据上传文件自动生成内容）
+                with st.spinner("正在调用 GLM-4 API 生成会议纪要，这可能需要 1-2 分钟..."):
+                    generated_minutes = client.generate_minutes(
+                        transcript=transcript_content,
+                        notes=notes_content,
+                        reference=reference
+                    )
 
----
+                if generated_minutes:
+                    st.success("✅ 会议纪要生成成功！")
 
-## 五、TODO事项
+                    # 保存到 session state
+                    st.session_state.generated_content = generated_minutes
 
-| 序号 | 主要事项 | 负责人 | 截止日期 | 状态 |
-|------|----------|--------|----------|------|
-| 1 | 根据会议内容填写 | 待确认 | 待确认 | 待启动 |
+                    # 自动保存到 outputs/ 目录
+                    outputs_dir = get_project_root() / "outputs"
+                    outputs_dir.mkdir(exist_ok=True)
 
----
+                    filename = f"管理周会纪要_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+                    filepath = outputs_dir / filename
 
-**撰写人：倩文**
-"""
+                    if write_file(filepath, generated_minutes):
+                        st.success(f"✅ 已保存到: {filepath}")
+                    else:
+                        st.warning("⚠️ 保存到文件失败，但可以在页面复制")
 
-                # 提示用户查看结果
-                st.info("👉 请切换到「📊 结果展示」标签页查看生成的会议纪要")
+                    # 提示用户查看结果
+                    st.info("👉 请切换到「📊 结果展示」标签页查看生成的会议纪要")
+                else:
+                    st.error("❌ 会议纪要生成失败，请检查 API Key 或重试")
+                    st.info("可能的原因：\n- API Key 无效\n- API 服务暂时不可用\n- 网络连接问题\n\n请检查 API 配置后重试。")
 
     # ==================== 标签页2：结果展示 ====================
     with tab2:
