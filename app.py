@@ -17,7 +17,7 @@ from docx.shared import Inches
 from github_manager import GitHubManager, create_github_manager, is_github_mode
 
 # GLM-4 客户端
-from glm_client import GLMClient, create_glm_client
+from glm_client import GLMClient
 
 # 页面配置
 st.set_page_config(
