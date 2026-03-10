@@ -892,56 +892,110 @@ def main():
                     api_key = st.secrets.get("GLM_API_KEY", st.session_state.get("glm_api_key", ""))
 
                     if not api_key:
-                        st.error("❌ 未配置 GLM-4 API Key，无法进行风格学习")
+                        st.error("❌ 未配置 GLM-4 API Key，无法进行深度风格学习")
                     else:
-                        # 创建风格学习器
-                        from style_learner import StyleLearner, update_style_template, append_to_learning_log
+                        # 创建深度风格学习器
+                        from style_learner_v2 import DeepStyleLearner, update_summary_with_style, update_terms_dict, update_user_preferences
                         glm_client = GLMClient(api_key)
-                        style_learner = StyleLearner(glm_client)
+                        deep_learner = DeepStyleLearner(glm_client)
 
-                        # 提取风格学习内容
-                        with st.spinner("🤖 正在分析您的修改，学习写作风格..."):
-                            learning_record = style_learner.extract_style_from_comparison(draft, content)
+                        st.markdown("---")
+                        st.markdown("#### 🧠 深度风格学习（正在分析您的写作风格...）")
 
-                            # 显示学习结果
-                            st.markdown("---")
-                            st.markdown("#### 📊 风格学习结果")
+                        # 1. 深度分析写作风格（措辞、句子结构、表达习惯等）
+                        with st.spinner("📝 正在深度分析写作风格（措辞、句子结构、表达习惯...）"):
+                            style_analysis = deep_learner.extract_writing_style(content, draft)
 
-                            if learning_record.get("user_modifications") and "提取失败" not in learning_record["user_modifications"]:
-                                st.success("✅ 已成功分析您的写作风格！")
+                        # 2. 提取新术语
+                        with st.spinner("📖 正在提取新术语..."):
+                            existing_terms = read_reference_file("02_组织与术语词典.md")
+                            new_terms = deep_learner.extract_new_terms(content, existing_terms)
 
-                                # 显示学习内容
-                                with st.expander("查看详细学习内容", expanded=False):
-                                    st.markdown("**用户修改要点：**")
-                                    st.markdown(learning_record.get("user_modifications", ""))
+                        # 3. 更新历史纪要重点总结
+                        with st.spinner("📚 正在更新历史纪要重点总结..."):
+                            style_guide = deep_learner.generate_style_guide(style_analysis)
+                            existing_summary = read_reference_file("01_历史纪要重点总结.md")
+                            updated_summary = update_summary_with_style(existing_summary, style_guide)
 
-                                    st.markdown("**发现的新风格规则：**")
-                                    st.markdown(learning_record.get("style_rules", ""))
+                            # 保存到 GitHub
+                            write_reference_file("01_历史纪要重点总结.md", updated_summary, f"深度学习更新: {final_version.name}")
+                            st.success("✅ 历史纪要重点总结已更新")
 
-                                    st.markdown("**建议的模板更新：**")
-                                    st.markdown(learning_record.get("template_updates", ""))
+                        # 4. 更新术语词典
+                        if new_terms:
+                            with st.spinner("📝 正在更新术语词典..."):
+                                updated_terms_dict = update_terms_dict(existing_terms, new_terms)
+                                write_reference_file("02_组织与术语词典.md", updated_terms_dict, f"新增术语: {len(new_terms)} 个")
+                                st.success(f"✅ 术语词典已更新，新增 {len(new_terms)} 个术语")
+                        else:
+                            st.info("💡 未发现新术语")
 
-                                # 更新风格模板
-                                current_template = read_reference_file("04_风格模板.md")
-                                updated_template = update_style_template(learning_record, current_template)
-                                write_reference_file("04_风格模板.md", updated_template, f"更新风格模板: {final_version.name}")
+                        # 5. 更新用户偏好（如果有多篇纪要）
+                        st.info("💡 用户偏好分析需要至少 2 篇会议纪要才能准确分析")
 
-                                # 保存学习记录
-                                new_log_entry = append_to_learning_log(learning_record)
+                        # 6. 更新风格模板
+                        with st.spinner("🎨 正在更新风格模板..."):
+                            current_template = read_reference_file("04_风格模板.md")
+                            new_template_content = f"""# 会议纪要最佳风格模板
 
-                                # 读取现有学习记录
-                                existing_log = read_reference_file("03_风格学习记录.md")
+本模板从深度学习中提取，持续优化中。
 
-                                # 追加新记录
-                                updated_log = new_log_entry + existing_log if existing_log else new_log_entry
+---
 
-                                # 写入并同步到 GitHub
-                                write_reference_file("03_风格学习记录.md", updated_log, f"添加学习记录: {final_version.name}")
+{style_guide}
 
-                                st.info("🎉 风格学习已完成！下次生成时会应用新学到的写作风格。")
-                            else:
-                                st.warning("⚠️ 风格分析未能成功提取有效信息，可能是修改内容较少。")
-                                st.info("下次您修改会议纪要后，系统会继续学习您的写作风格。")
+---
+
+{current_template}
+
+---
+
+## {datetime.now().strftime('%Y-%m-%d')} 深度学习更新
+
+### 写作风格特点
+{style_analysis.get('措辞特点', '')}
+
+### 句子结构特点
+{style_analysis.get('句子结构', '')}
+
+### 表达习惯
+{style_analysis.get('表达习惯', '')}
+
+### 重点强调方式
+{style_analysis.get('重点强调', '')}
+
+---
+"""
+                            write_reference_file("04_风格模板.md", new_template_content, f"深度学习更新: {final_version.name}")
+                            st.success("✅ 风格模板已更新")
+
+                        # 显示详细学习结果
+                        st.markdown("---")
+                        st.markdown("#### 📊 深度学习结果")
+
+                        with st.expander("查看详细学习内容", expanded=False):
+                            st.markdown("### 🎯 措辞特点")
+                            st.markdown(style_analysis.get('措辞特点', '分析失败'))
+
+                            st.markdown("### 📐 句子结构")
+                            st.markdown(style_analysis.get('句子结构', '分析失败'))
+
+                            st.markdown("### 💬 表达习惯")
+                            st.markdown(style_analysis.get('表达习惯', '分析失败'))
+
+                            st.markdown("### ⭐ 重点强调方式")
+                            st.markdown(style_analysis.get('重点强调', '分析失败'))
+
+                            st.markdown("### 🎨 格式偏好")
+                            st.markdown(style_analysis.get('格式偏好', '分析失败'))
+
+                            if new_terms:
+                                st.markdown("### 📖 新增术语")
+                                for term in new_terms:
+                                    st.markdown(f"- **{term['type']}**: {term['wrong']} → {term['correct']} ({term['note']})")
+
+                        st.success("🎉 深度风格学习已完成！下次生成时会应用新学到的写作风格。")
+                        st.info("💡 提示：越使用，越智能。建议多上传几次最终版会议纪要，让系统更深入地学习您的写作风格。")
                 else:
                     # 没有初稿可对比，只做简单的术语提取
                     import jieba
