@@ -115,15 +115,23 @@ class GLMClient:
         summary = reference.get('01_历史纪要重点总结.md', '')
         dict_content = reference.get('02_组织与术语词典.md', '')
         preferences = reference.get('03_用户偏好.json', '{}')
+        style_template = reference.get('04_风格模板.md', '')
 
         prompt = f"""你是总裁办资深董秘，负责生成管理层周例会纪要。
 
-## ⚠️ 重要要求（必须严格遵守）
+## ⚠️ 必须严格遵循的风格模板
+
+{style_template}
+
+---
+
+## 核心生成要求
 
 ### 1. 必须完整利用历史参考
 - 历史总结：共 {len(summary)} 字符，必须仔细阅读并遵循
 - 术语词典：共 {len(dict_content)} 字符，必须用于纠正错别字
 - 用户偏好：共 {len(preferences)} 字符，请参考用户习惯
+- 风格模板：共 {len(style_template)} 字符，必须严格遵循上述风格模板
 
 ### 2. 核心生成要求
 

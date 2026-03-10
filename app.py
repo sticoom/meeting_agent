@@ -703,19 +703,20 @@ def main():
                     # 用户偏好是可选的，不报错
                     reference['03_用户偏好.json'] = '{}'
 
-                # 读取术语词典
-                dict_content = read_reference_file("02_组织与术语词典.md")
-                if len(dict_content) > 0:
-                    reference['02_组织与术语词典.md'] = dict_content
-                    st.success(f"✅ 术语词典读取成功: {len(dict_content)} 字符")
-                else:
-                    ref_errors.append("02_组织与术语词典.md: 读取失败")
-                    st.error("❌ 术语词典读取失败，无法自动纠正错别字")
+                # 读取风格模板（新增）
+                style_template_github = read_reference_file("04_风格模板.md")
+                style_template_direct = read_reference_file_no_prefix("04_风格模板.md")
 
-                # 读取用户偏好（可选）
-                preferences_content = read_reference_file("03_用户偏好.json")
-                if len(preferences_content) > 0:
-                    reference['03_用户偏好.json'] = preferences_content
+                if len(style_template_github) > 0:
+                    reference['04_风格模板.md'] = style_template_github
+                    st.success(f"✅ 风格模板读取成功（GitHub）: {len(style_template_github)} 字符")
+                elif len(style_template_direct) > 0:
+                    reference['04_风格模板.md'] = style_template_direct
+                    st.success(f"✅ 风格模板读取成功（直接）: {len(style_template_direct)} 字符")
+                else:
+                    # 风格模板是可选的，不报错，但给提示
+                    reference['04_风格模板.md'] = ''
+                    st.info("⚠️ 风格模板未读取到，将使用默认风格")
 
                 # 显示错误信息
                 if ref_errors:
@@ -763,12 +764,15 @@ def main():
                 st.write(f"- **手写重点长度**: {len(notes_content)} 字符")
                 st.write(f"- **历史总结长度**: {len(reference.get('01_历史纪要重点总结.md', ''))} 字符")
                 st.write(f"- **术语词典长度**: {len(reference.get('02_组织与术语词典.md', ''))} 字符")
+                st.write(f"- **风格模板长度**: {len(reference.get('04_风格模板.md', ''))} 字符")
 
                 # 添加警告提示
                 if len(reference.get('01_历史纪要重点总结.md', '')) == 0:
                     st.warning("⚠️ 历史总结长度为 0，会议纪要可能无法参考历史风格")
                 if len(reference.get('02_组织与术语词典.md', '')) == 0:
                     st.warning("⚠️ 术语词典长度为 0，无法自动纠正错别字")
+                if len(reference.get('04_风格模板.md', '')) == 0:
+                    st.info("💡 风格模板为空，系统将使用默认风格生成。上传最终版纪要后，系统会自动学习您的写作风格！")
 
                 if not transcript_content:
                     st.error("⚠️ 录音转写内容为空！生成的会议纪要可能不完整")
@@ -880,21 +884,72 @@ def main():
                     doc = Document(io.BytesIO(final_version.getvalue()))
                     content = '\n'.join([p.text for p in doc.paragraphs])
 
-                # 简单分析（提取新术语）
-                import jieba
-                words = jieba.cut(content)
-                word_freq = {}
-                for word in words:
-                    if len(word) > 1:
-                        word_freq[word] = word_freq.get(word, 0) + 1
+                # 获取初稿内容
+                draft = st.session_state.get("generated_content", "")
 
-                # 提取潜在新术语
-                potential_terms = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+                if draft and len(content) > 0:
+                    # 获取 API Key
+                    api_key = st.secrets.get("GLM_API_KEY", st.session_state.get("glm_api_key", ""))
 
-                # 更新历史纪要总结
-                summary_content = read_reference_file("01_历史纪要重点总结.md")
-                today = datetime.now().strftime('%Y-%m-%d')
-                new_entry = f"""
+                    if not api_key:
+                        st.error("❌ 未配置 GLM-4 API Key，无法进行风格学习")
+                    else:
+                        # 创建风格学习器
+                        from style_learner import StyleLearner, update_style_template, append_to_learning_log
+                        glm_client = GLMClient(api_key)
+                        style_learner = StyleLearner(glm_client)
+
+                        # 提取风格学习内容
+                        with st.spinner("🤖 正在分析您的修改，学习写作风格..."):
+                            learning_record = style_learner.extract_style_from_comparison(draft, content)
+
+                            # 显示学习结果
+                            st.markdown("---")
+                            st.markdown("#### 📊 风格学习结果")
+
+                            if learning_record.get("user_modifications") and "提取失败" not in learning_record["user_modifications"]:
+                                st.success("✅ 已成功分析您的写作风格！")
+
+                                # 显示学习内容
+                                with st.expander("查看详细学习内容", expanded=False):
+                                    st.markdown("**用户修改要点：**")
+                                    st.markdown(learning_record.get("user_modifications", ""))
+
+                                    st.markdown("**发现的新风格规则：**")
+                                    st.markdown(learning_record.get("style_rules", ""))
+
+                                    st.markdown("**建议的模板更新：**")
+                                    st.markdown(learning_record.get("template_updates", ""))
+
+                                # 更新风格模板
+                                current_template = read_reference_file("04_风格模板.md")
+                                updated_template = update_style_template(learning_record, current_template)
+                                write_reference_file("04_风格模板.md", updated_template, f"更新风格模板: {final_version.name}")
+
+                                # 保存学习记录
+                                append_to_learning_log(learning_record)
+                                write_reference_file("03_风格学习记录.md", append_to_learning_log(learning_record), f"添加学习记录: {final_version.name}")
+
+                                st.info("🎉 风格学习已完成！下次生成时会应用新学到的写作风格。")
+                            else:
+                                st.warning("⚠️ 风格分析未能成功提取有效信息，可能是修改内容较少。")
+                                st.info("下次您修改会议纪要后，系统会继续学习您的写作风格。")
+                else:
+                    # 没有初稿可对比，只做简单的术语提取
+                    import jieba
+                    words = jieba.cut(content)
+                    word_freq = {}
+                    for word in words:
+                        if len(word) > 1:
+                            word_freq[word] = word_freq.get(word, 0) + 1
+
+                    # 提取潜在新术语
+                    potential_terms = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+
+                    # 更新历史纪要总结
+                    summary_content = read_reference_file("01_历史纪要重点总结.md")
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    new_entry = f"""
 
 ## {today} 自动更新总结
 
@@ -910,10 +965,11 @@ GitHub Cloud 模式自动更新
 
 ---
 """
-                updated_summary = new_entry + summary_content if summary_content else new_entry
-                write_reference_file("01_历史纪要重点总结.md", updated_summary, f"更新历史纪要总结: {final_version.name}")
+                    updated_summary = new_entry + summary_content if summary_content else new_entry
+                    write_reference_file("01_历史纪要重点总结.md", updated_summary, f"更新历史纪要总结: {final_version.name}")
 
-                st.info("✅ Reference 文件已更新并保存到 GitHub")
+                    st.info("✅ Reference 文件已更新并保存到 GitHub")
+                    st.info("💡 提示：下次生成会议纪要后，上传最终版时系统会自动学习您的写作风格！")
 
         else:
             st.info("👈 请先在「📝 纪要生成」标签页生成会议纪要")

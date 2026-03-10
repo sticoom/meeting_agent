@@ -166,7 +166,9 @@ class GitHubManager:
         reference_files = [
             "reference/01_历史纪要重点总结.md",
             "reference/02_组织与术语词典.md",
-            "reference/03_用户偏好.json"
+            "reference/03_用户偏好.json",
+            "reference/03_风格学习记录.md",
+            "reference/04_风格模板.md"
         ]
 
         for file_path in reference_files:
@@ -178,7 +180,7 @@ class GitHubManager:
             else:
                 print(f"   ❌ 读取失败: {file_path}")
 
-        print(f"📊 Reference 文件统计: {len(files)} 个成功, {3 - len(files)} 个失败")
+        print(f"📊 Reference 文件统计: {len(files)} 个成功, {len(reference_files) - len(files)} 个失败")
         return files
 
     def update_reference_file(self, file_name: str, content: str, message: str) -> bool:
