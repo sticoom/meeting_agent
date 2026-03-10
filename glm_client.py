@@ -26,6 +26,52 @@ class GLMClient:
             "Content-Type": "application/json"
         }
 
+    def test_connection(self) -> bool:
+        """
+        测试 API 连接
+
+        Returns:
+            是否连接成功
+        """
+        try:
+            payload = {
+                "model": "glm-4",
+                "messages": [
+                    {"role": "user", "content": "测试连接"}
+                ],
+                "max_tokens": 10
+            }
+
+            response = requests.post(
+                self.base_url,
+                headers=self.headers,
+                json=payload,
+                timeout=10
+            )
+
+            response.raise_for_status()
+            result = response.json()
+
+            if 'choices' in result and len(result['choices']) > 0:
+                print("✅ API 连接测试成功")
+                return True
+
+            print(f"❌ API 响应格式错误: {result}")
+            return False
+
+        except requests.exceptions.Timeout:
+            print("❌ API 连接超时")
+            return False
+        except requests.exceptions.HTTPError as e:
+            print(f"❌ API HTTP 错误: {e}")
+            if e.response:
+                print(f"   HTTP 状态码: {e.response.status_code}")
+                print(f"   响应内容: {e.response.text[:500]}")
+            return False
+        except Exception as e:
+            print(f"❌ API 连接测试失败: {type(e).__name__}: {e}")
+            return False
+
     def generate_minutes(self, transcript: str, notes: str, reference: Dict[str, str]) -> Optional[str]:
         """
         生成会议纪要
@@ -194,6 +240,28 @@ class GLMClient:
 现在请根据以上风格要求和生成规则生成会议纪要。"""
 
         return prompt
+
+    def _build_user_message(self, transcript: str, notes: str) -> str:
+        """
+        构建用户消息
+
+        Args:
+            transcript: 录音转写内容
+            notes: 手写重点内容
+
+        Returns:
+            用户消息
+        """
+        message = f"""请根据以下会议内容生成会议纪要：
+
+## 录音转写内容
+{transcript}
+
+## 手写重点内容
+{notes if notes else '无'}
+
+请严格按照系统提示词中的要求生成会议纪要。"""
+        return message
 
     def _extract_style_requirements(self, style_template: str) -> Dict[str, str]:
         """
