@@ -906,6 +906,67 @@ def main():
                         with st.spinner("📝 正在深度分析写作风格（措辞、句子结构、表达习惯...）"):
                             style_analysis = deep_learner.extract_writing_style(content, draft)
 
+                            # 显示学习结果预览
+                            st.markdown("---")
+                            st.markdown("#### 📊 风格学习结果预览")
+                            learned_count = sum(1 for k, v in style_analysis.items() if v and v != "待学习")
+                            st.write(f"**学习进度**: {learned_count}/6 个维度已完成")
+                            st.write(f"**数据量对比**: 最终版 {len(content)} 字符 vs 初稿 {len(draft)} 字符")
+                            if learned_count < 6:
+                                st.warning(f"⚠️ 还有 {6 - learned_count} 个维度未完成学习，建议多上传几篇会议纪要")
+
+                            # 显示各维度的学习状态
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.markdown("**措辞特点**")
+                                if style_analysis.get('措辞特点') and style_analysis['措辞特点'] != '待学习':
+                                    st.success("✅ 已学习")
+                                    st.caption(f"长度: {len(style_analysis['措辞特点'])} 字符")
+                                else:
+                                    st.warning("⏳ 待学习")
+
+                            with col2:
+                                st.markdown("**句子结构**")
+                                if style_analysis.get('句子结构') and style_analysis['句子结构'] != '待学习':
+                                    st.success("✅ 已学习")
+                                    st.caption(f"长度: {len(style_analysis['句子结构'])} 字符")
+                                else:
+                                    st.warning("⏳ 待学习")
+
+                            with col3:
+                                st.markdown("**表达习惯**")
+                                if style_analysis.get('表达习惯') and style_analysis['表达习惯'] != '待学习':
+                                    st.success("✅ 已学习")
+                                    st.caption(f"长度: {len(style_analysis['表达习惯'])} 字符")
+                                else:
+                                    st.warning("⏳ 待学习")
+
+                            # 第二行
+                            col4, col5, col6 = st.columns(3)
+                            with col4:
+                                st.markdown("**重点强调**")
+                                if style_analysis.get('重点强调') and style_analysis['重点强调'] != '待学习':
+                                    st.success("✅ 已学习")
+                                    st.caption(f"长度: {len(style_analysis['重点强调'])} 字符")
+                                else:
+                                    st.warning("⏳ 待学习")
+
+                            with col5:
+                                st.markdown("**格式偏好**")
+                                if style_analysis.get('格式偏好') and style_analysis['格式偏好'] != '待学习':
+                                    st.success("✅ 已学习")
+                                    st.caption(f"长度: {len(style_analysis['格式偏好'])} 字符")
+                                else:
+                                    st.warning("⏳ 待学习")
+
+                            with col6:
+                                st.markdown("**特殊表达**")
+                                if style_analysis.get('特殊表达') and style_analysis['特殊表达'] != '待学习':
+                                    st.success("✅ 已学习")
+                                    st.caption(f"长度: {len(style_analysis['特殊表达'])} 字符")
+                                else:
+                                    st.warning("⏳ 待学习")
+
                         # 2. 提取新术语
                         with st.spinner("📖 正在提取新术语..."):
                             existing_terms = read_reference_file("02_组织与术语词典.md")

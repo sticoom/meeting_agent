@@ -21,18 +21,18 @@ class DeepStyleLearner:
         """
         self.client = glm_client
 
-    def extract_writing_style(self, final_minutes: str, transcript: str = "") -> Dict[str, any]:
+    def extract_writing_style(self, final_minutes: str, draft_minutes: str = "") -> Dict[str, any]:
         """
         深度分析会议纪要的写作风格
 
         Args:
             final_minutes: 最终版会议纪要
-            transcript: 录音转写内容（可选，用于对比分析）
+            draft_minutes: 初稿会议纪要（可选，用于对比分析学习用户的修改习惯）
 
         Returns:
             包含深度风格分析的字典
         """
-        prompt = self._build_deep_analysis_prompt(final_minutes, transcript)
+        prompt = self._build_deep_analysis_prompt(final_minutes, draft_minutes)
 
         try:
             print(f"🧠 开始深度分析会议纪要写作风格...")
@@ -201,23 +201,40 @@ class DeepStyleLearner:
         if not style_analysis.get("措辞特点") and not style_analysis.get("句子结构"):
             return ""
 
+        # 统计有多少维度已完成学习
+        learned_count = sum(1 for k, v in style_analysis.items() if v and v != "待学习")
+
         guide = f"""
 ## 写作风格指南
+
+> 📊 **学习进度**: {learned_count}/6 个维度已完成学习
+
+---
 
 ### 1. 措辞特点
 {style_analysis.get('措辞特点', '待学习')}
 
+---
+
 ### 2. 句子结构
 {style_analysis.get('句子结构', '待学习')}
+
+---
 
 ### 3. 表达习惯
 {style_analysis.get('表达习惯', '待学习')}
 
+---
+
 ### 4. 重点强调方式
 {style_analysis.get('重点强调', '待学习')}
 
+---
+
 ### 5. 格式偏好
 {style_analysis.get('格式偏好', '待学习')}
+
+---
 
 ### 6. 特殊表达
 {style_analysis.get('特殊表达', '待学习')}
@@ -225,91 +242,110 @@ class DeepStyleLearner:
 
         return guide
 
-    def _build_deep_analysis_prompt(self, final_minutes: str, transcript: str = "") -> str:
+    def _build_deep_analysis_prompt(self, final_minutes: str, draft_minutes: str = "") -> str:
         """构建深度分析提示词"""
         # 限制长度，避免超出 token 限制
-        final_preview = final_minutes[:6000] if len(final_minutes) > 6000 else final_minutes
-        transcript_preview = transcript[:3000] if len(transcript) > 3000 else transcript
+        final_preview = final_minutes[:7000] if len(final_minutes) > 7000 else final_minutes
 
-        transcript_section = f"\n\n## 录音转写参考\n\n{transcript_preview}\n\n" if transcript else ""
+        # 对比分析部分
+        comparison_section = ""
+        if draft_minutes and len(draft_minutes) > 100:
+            draft_preview = draft_minutes[:4000] if len(draft_minutes) > 4000 else draft_minutes
+            comparison_section = f"""
+
+## 对比参考材料
+
+请对比最终版纪要与初稿，分析用户是如何修改和优化的：
+
+### 初稿参考
+```
+{draft_preview}
+```
+
+### 对比分析重点
+- 用户删除了哪些口语化表达？如何替换的？
+- 用户新增了哪些正式表达？
+- 用户如何重新组织信息的？
+- 用户如何处理冷总发言的？
+- 用户对数据和重点信息的呈现方式有哪些改进？
+"""
 
         prompt = f"""请深度分析以下会议纪要的写作风格，提取以下维度的详细信息：
 
-## 会议纪要
+## 最终版会议纪要
 ```
 {final_preview}
 ```
-{transcript_section}
+{comparison_section}
 ## 分析要求
 
-请从以下维度深度分析这篇会议纪要的写作风格：
+请从以下维度深度分析这篇会议纪要的写作风格。如果提供了初稿，请通过对比分析用户的修改习惯：
 
 ### 1. 措辞特点（重要）
-- 使用的词汇特点（正式/半正式/口语化程度）
-- 常用的高级表达和措辞
-- 哪些词汇是偏好使用的
-- 哪些词汇是避免使用的
-- 具体的用词示例（至少 5 个）
+- 使用的词汇特点（正式/半正式/口语化程度，给出判断依据）
+- 常用的高级表达和措辞（列出具体词汇）
+- 哪些词汇是偏好使用的（给出频率高的词汇）
+- 哪些词汇是避免使用的（说明原因）
+- 具体的用词示例（至少 5 个真实示例）
 
 ### 2. 句子结构（重要）
-- 句子的长短特点（短句/中长句/长句）
-- 句子结构的偏好（简单句/复合句/复杂句）
-- 段落组织方式
-- 逻辑连接词的使用习惯
-- 具体的句子结构示例（至少 3 个）
+- 句子的长短特点（短句/中长句/长句比例，给出统计）
+- 句子结构的偏好（简单句/复合句/复杂句的使用比例）
+- 段落组织方式（平均每段字数）
+- 逻辑连接词的使用习惯（列出常用的连接词）
+- 具体的句子结构示例（至少 3 个真实示例）
 
 ### 3. 表达习惯（重要）
-- 冷总发言的处理方式
-- 普通信息的表达方式
-- 数据呈现的习惯
-- 时间表述的方式
-- 责任人表述的方式
-- 具体的表达示例（至少 3 个）
+- 冷总发言的处理方式（直接引用/转述/总结，给出示例）
+- 普通信息的表达方式（数据、时间、责任人的表述习惯）
+- 数据呈现的习惯（表格/文字/混合，示例）
+- 时间表述的方式（具体格式）
+- 责任人表述的方式（格式特点）
+- 具体的表达示例（至少 3 个真实示例）
 
 ### 4. 重点强调方式（重要）
-- 如何强调重要信息（加粗、特殊格式、独立段落等）
-- 关键数据的呈现方式
-- 优先级的表达方式
-- 冷总指示的强调方式
-- 具体的强调示例（至少 3 个）
+- 如何强调重要信息（加粗、特殊格式、独立段落等，示例）
+- 关键数据的呈现方式（数字、百分比、表格）
+- 优先级的表达方式（如何标记紧急/重要）
+- 冷总指示的强调方式（特殊格式）
+- 具体的强调示例（至少 3 个真实示例）
 
 ### 5. 格式偏好
-- 五大板块的具体结构
-- 标题层级的使用习惯
-- 列表的使用方式
-- 表格的格式偏好
-- 特殊格式的使用
+- 五大板块的具体结构（各板块的字数比例）
+- 标题层级的使用习惯（#、##、### 的使用规则）
+- 列表的使用方式（有序/无序列表的偏好）
+- 表格的格式偏好（列数、对齐方式）
+- 特殊格式的使用（分割线、引用等）
 
 ### 6. 特殊表达（重要）
-- 是否有独特的表达方式或口头禅
-- 是否有固定的开场白或结束语
-- 是否有特殊的连接词
-- 是否有特定的标点使用习惯
-- 具体的特殊表达示例（至少 3 个）
+- 是否有独特的表达方式或口头禅（如果有，列出）
+- 是否有固定的开场白或结束语（原文引用）
+- 是否有特殊的连接词（列出）
+- 是否有特定的标点使用习惯（说明）
+- 具体的特殊表达示例（至少 3 个真实示例）
 
-## 输出格式要求
+## 输出格式要求（严格执行）
 
-请严格按照以下格式返回，每项都要有具体示例：
+**必须严格按照以下 JSON 格式返回，不要包含任何其他文本：**
 
-### 措辞特点
-[详细的措辞特点描述，包含具体用词示例]
+```json
+{{
+  "措辞特点": "详细的措辞特点描述，包含具体用词示例",
+  "句子结构": "详细的句子结构描述，包含具体示例",
+  "表达习惯": "详细的表达习惯描述，包含具体示例",
+  "重点强调": "详细的重点强调方式描述，包含具体示例",
+  "格式偏好": "详细的格式偏好描述，包含具体示例",
+  "特殊表达": "详细的特殊表达描述，包含具体示例"
+}}
+```
 
-### 句子结构
-[详细的句子结构描述，包含具体示例]
+**重要提示：**
+1. 只返回 JSON 对象，不要包含任何解释性文字
+2. 每个字段的值必须是完整的描述，包含真实示例
+3. 如果某个维度没有明显特征，请说明"无明显特点"
+4. 示例必须来自原文，不要编造
 
-### 表达习惯
-[详细的表达习惯描述，包含具体示例]
-
-### 重点强调
-[详细的重点强调方式描述，包含具体示例]
-
-### 格式偏好
-[详细的格式偏好描述]
-
-### 特殊表达
-[详细的特殊表达描述，包含具体示例]
-
-现在请开始深度分析。"""
+现在请开始深度分析并返回 JSON 格式的结果。"""
 
         return prompt
 
@@ -441,6 +477,38 @@ class DeepStyleLearner:
 
     def _parse_deep_analysis(self, content: str) -> Dict[str, str]:
         """解析深度分析内容"""
+        # 尝试解析 JSON 格式
+        import re
+
+        # 查找 JSON 对象
+        json_match = re.search(r'\{[\s\S]*\}', content)
+
+        if json_match:
+            try:
+                import json
+                # 清理 JSON 字符串（移除可能的 markdown 代码块标记）
+                json_str = json_match.group(0).strip()
+                json_str = json_str.replace('```json', '').replace('```', '')
+
+                analysis_dict = json.loads(json_str)
+
+                # 验证并补充缺失的字段
+                required_keys = ["措辞特点", "句子结构", "表达习惯", "重点强调", "格式偏好", "特殊表达"]
+                for key in required_keys:
+                    if key not in analysis_dict or not analysis_dict[key]:
+                        analysis_dict[key] = "待学习"
+
+                print(f"✅ JSON 解析成功，提取了 {len([k for k in analysis_dict if analysis_dict[k] != '待学习'])} 个维度的信息")
+
+                return analysis_dict
+
+            except json.JSONDecodeError as e:
+                print(f"⚠️ JSON 解析失败，尝试文本解析: {e}")
+                # JSON 解析失败，继续使用文本解析
+            except Exception as e:
+                print(f"⚠️ 解析出错: {e}")
+
+        # 回退到文本解析（兼容旧格式）
         analysis = {
             "措辞特点": "",
             "句子结构": "",
@@ -468,7 +536,7 @@ class DeepStyleLearner:
                 current_section = "格式偏好"
             elif line.startswith("### 特殊表达"):
                 current_section = "特殊表达"
-            elif line.startswith("- ") and current_section:
+            elif (line.startswith("- ") or line.startswith("• ") or line.startswith("* ")) and current_section:
                 if analysis[current_section]:
                     analysis[current_section] += "\n"
                 analysis[current_section] += line
