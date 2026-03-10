@@ -3,6 +3,7 @@
 对比初稿和最终稿，提取风格学习内容
 """
 
+import requests
 import json
 from typing import Dict, Optional
 from glm_client import GLMClient
@@ -37,6 +38,7 @@ class StyleLearner:
             print(f"🤖 开始分析初稿和最终稿的差异...")
             print(f"   - 初稿长度: {len(draft)} 字符")
             print(f"   - 最终稿长度: {len(final)} 字符")
+            print(f"   - API URL: {self.client.base_url}")
 
             # 调用 GLM-4 API
             payload = {
@@ -49,7 +51,7 @@ class StyleLearner:
                 "max_tokens": 2000
             }
 
-            response = self.client.requests.post(
+            response = requests.post(
                 self.client.base_url,
                 headers=self.client.headers,
                 json=payload,
@@ -62,15 +64,22 @@ class StyleLearner:
             if 'choices' in result and len(result['choices']) > 0:
                 content = result['choices'][0]['message']['content']
                 print(f"✅ 风格分析完成，生成 {len(content)} 字符")
+                print(f"   - API 响应: {content[:200]}...")  # 显示前200字符
 
                 # 解析返回的内容
-                return self._parse_learning_content(content)
+                parsed = self._parse_learning_content(content)
+                print(f"   - 解析结果: user_modifications={len(parsed.get('user_modifications', ''))}, "
+                      f"style_rules={len(parsed.get('style_rules', ''))}, "
+                      f"template_updates={len(parsed.get('template_updates', ''))}")
+                return parsed
 
             print(f"❌ API 响应格式错误: {result}")
             return self._empty_learning_record()
 
         except Exception as e:
             print(f"❌ 风格分析失败: {e}")
+            print(f"   错误类型: {type(e).__name__}")
+            print(f"   错误详情: {str(e)}")
             return self._empty_learning_record()
 
     def _build_comparison_prompt(self, draft: str, final: str) -> str:
@@ -278,31 +287,20 @@ def update_style_template(learning_record: Dict[str, str], current_template: str
     return updated_template
 
 
-def append_to_learning_log(learning_record: Dict[str, str]) -> bool:
+def append_to_learning_log(learning_record: Dict[str, str]) -> str:
     """
-    将学习记录追加到学习日志文件
+    生成学习记录内容字符串（不直接写入文件，由调用方处理）
 
     Args:
         learning_record: 学习记录字典
 
     Returns:
-        是否成功
+        学习记录内容字符串
     """
     from datetime import datetime
-    from pathlib import Path
 
-    try:
-        log_file = Path("reference/03_风格学习记录.md")
-        log_file.parent.mkdir(exist_ok=True)
-
-        # 读取现有日志
-        existing_log = ""
-        if log_file.exists():
-            with open(log_file, 'r', encoding='utf-8') as f:
-                existing_log = f.read()
-
-        # 准备新的学习记录
-        new_record = f"""
+    # 准备新的学习记录
+    new_record = f"""
 ---
 
 ## {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 学习记录
@@ -317,18 +315,6 @@ def append_to_learning_log(learning_record: Dict[str, str]) -> bool:
 {learning_record['template_updates']}
 
 ---
-
 """
-
-        # 更新日志文件
-        updated_log = new_record + existing_log
-
-        with open(log_file, 'w', encoding='utf-8') as f:
-            f.write(updated_log)
-
-        print(f"✅ 学习记录已保存到: {log_file}")
-        return True
-
-    except Exception as e:
-        print(f"❌ 保存学习记录失败: {e}")
-        return False
+    print(f"✅ 学习记录内容已生成")
+    return new_record

@@ -927,8 +927,16 @@ def main():
                                 write_reference_file("04_风格模板.md", updated_template, f"更新风格模板: {final_version.name}")
 
                                 # 保存学习记录
-                                append_to_learning_log(learning_record)
-                                write_reference_file("03_风格学习记录.md", append_to_learning_log(learning_record), f"添加学习记录: {final_version.name}")
+                                new_log_entry = append_to_learning_log(learning_record)
+
+                                # 读取现有学习记录
+                                existing_log = read_reference_file("03_风格学习记录.md")
+
+                                # 追加新记录
+                                updated_log = new_log_entry + existing_log if existing_log else new_log_entry
+
+                                # 写入并同步到 GitHub
+                                write_reference_file("03_风格学习记录.md", updated_log, f"添加学习记录: {final_version.name}")
 
                                 st.info("🎉 风格学习已完成！下次生成时会应用新学到的写作风格。")
                             else:
