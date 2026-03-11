@@ -111,6 +111,37 @@ def get_skill_md_path():
     return get_project_root() / "skill.md"
 
 
+def _get_available_history_samples() -> List[str]:
+    """
+    获取可用的历史纪要文件列表
+
+    Returns:
+        历史纪要文件名列表
+    """
+    # 优先尝试从 GitHub 读取
+    github_mgr = create_github_manager(st)
+    if github_mgr:
+        try:
+            # GitHub 模式：从仓库读取
+            available_files = github_mgr.list_files("历史纪要/")
+            # 过滤出纪要文件
+            available_samples = [f for f in available_files if f.startswith('管理周会纪要') and f.endswith('.md')]
+            print(f"✅ 从 GitHub 获取到 {len(available_samples)} 篇历史纪要")
+            return available_samples
+        except Exception as e:
+            print(f"⚠️ GitHub 读取失败: {e}，回退到本地读取")
+
+    # 回退到本地读取
+    history_dir = get_project_root() / "reference" / "历史纪要"
+    if history_dir.exists():
+        available_samples = [f.name for f in history_dir.glob('管理周会纪要*.md')]
+        print(f"✅ 从本地获取到 {len(available_samples)} 篇历史纪要")
+        return available_samples
+    else:
+        print("⚠️ 本地历史纪要目录不存在")
+        return []
+
+
 def get_dict_md_path():
     """获取术语词典文件路径"""
     return get_project_root() / "reference" / "02_组织与术语词典.md"
@@ -357,6 +388,40 @@ def main():
             st.caption(f"仓库: {github_mgr.owner}/{github_mgr.repo}")
         else:
             st.info("📁 本地文件模式")
+
+        st.markdown("---")
+
+        # 历史纪要范文选择
+        st.markdown("### 📚 历史纪要范文选择")
+
+        # 读取可用的历史纪要文件
+        available_samples = _get_available_history_samples()
+
+        if available_samples:
+            st.caption(f"找到 {len(available_samples)} 篇历史纪要")
+
+            # 默认选择最新的 2 篇（用户要求）
+            if 'selected_history_samples' not in st.session_state:
+                available_samples.sort(key=lambda x: x.lower(), reverse=True)
+                default_selected = available_samples[:2]
+                st.session_state.selected_history_samples = default_selected
+
+            # 多选框
+            selected = st.multiselect(
+                "选择作为范文的历史纪要（最多 2 篇）",
+                options=available_samples,
+                default=st.session_state.get('selected_history_samples', [])
+            )
+
+            st.session_state.selected_history_samples = selected
+
+            # 显示选中的摘要
+            if selected:
+                st.info(f"已选择 {len(selected)} 篇范文：{', '.join(selected[:3])}...")
+            else:
+                st.warning("⚠️ 未选择范文，将只使用风格规则生成")
+        else:
+            st.warning("⚠️ 未找到历史纪要，请先上传历史会议纪要到 reference/历史纪要/ 目录")
 
         st.markdown("---")
 
@@ -781,11 +846,26 @@ def main():
                 # 调用 GLM-4 API 生成会议纪要
                 client = GLMClient(api_key)
 
+                # 获取选中的历史纪要范文
+                selected_history = st.session_state.get('selected_history_samples', [])
+
+                # 读取完整范文内容
+                history_samples = []
+                for sample_file in selected_history:
+                    content = read_reference_file(f"历史纪要/{sample_file}")
+                    if content:
+                        history_samples.append({
+                            'title': sample_file.replace('.md', ''),
+                            'content': content
+                        })
+                        print(f"✅ 读取范文：{sample_file}（{len(content)} 字符）")
+
                 with st.spinner("正在调用 GLM-4 API 生成会议纪要，这可能需要 1-2 分钟..."):
                     generated_minutes = client.generate_minutes(
                         transcript=transcript_content,
                         notes=notes_content,
-                        reference=reference
+                        reference=reference,
+                        history_samples=history_samples
                     )
 
                 if generated_minutes:

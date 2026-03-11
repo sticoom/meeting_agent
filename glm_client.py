@@ -72,7 +72,7 @@ class GLMClient:
             print(f"❌ API 连接测试失败: {type(e).__name__}: {e}")
             return False
 
-    def generate_minutes(self, transcript: str, notes: str, reference: Dict[str, str]) -> Optional[str]:
+    def generate_minutes(self, transcript: str, notes: str, reference: Dict[str, str], history_samples: List[Dict[str, str]] = None) -> Optional[str]:
         """
         生成会议纪要
 
@@ -80,12 +80,13 @@ class GLMClient:
             transcript: 录音转写内容
             notes: 手写重点内容
             reference: reference 文件内容字典
+            history_samples: 历史会议纪要范文列表（可选，1-2 篇完整内容）
 
         Returns:
             生成的会议纪要内容
         """
         # 构建系统提示词
-        system_prompt = self._build_system_prompt(reference)
+        system_prompt = self._build_system_prompt(reference, history_samples)
 
         # 构建用户消息
         user_message = self._build_user_message(transcript, notes)
@@ -98,6 +99,8 @@ class GLMClient:
             print(f"   - 手写重点: {len(notes)} 字符")
             print(f"   - 历史总结: {len(reference.get('01_历史纪要重点总结.md', ''))} 字符")
             print(f"   - 术语词典: {len(reference.get('02_组织与术语词典.md', ''))} 字符")
+            if history_samples:
+                print(f"   - 历史范文: {len(history_samples)} 篇，约 {sum(len(s.get('content', '')) for s in history_samples)} 字符")
 
             payload = {
                 "model": "glm-4",
@@ -148,12 +151,13 @@ class GLMClient:
             print(f"   错误类型: {type(e).__name__}")
             return None
 
-    def _build_system_prompt(self, reference: Dict[str, str]) -> str:
+    def _build_system_prompt(self, reference: Dict[str, str], history_samples: List[Dict[str, str]] = None) -> str:
         """
         构建系统提示词
 
         Args:
             reference: reference 文件内容
+            history_samples: 历史会议纪要范文列表（可选）
 
         Returns:
             系统提示词
@@ -165,6 +169,22 @@ class GLMClient:
 
         # 从风格模板中提取具体的风格要求
         style_requirements = self._extract_style_requirements(style_template)
+
+        # 构建范文部分
+        samples_section = ""
+        if history_samples and len(history_samples) > 0:
+            samples_section = "## 📚 历史会议纪要范例（重点参考）\n\n"
+            samples_section += "请仔细阅读以下历史会议纪要，学习其：\n"
+            samples_section += "- **连贯性**：段落之间的逻辑连接、信息递进关系\n"
+            samples_section += "- **表达习惯**：冷总发言的处理方式、数据呈现格式\n"
+            samples_section += "- **句子结构**：长句和短句的搭配、段落组织\n"
+            samples_section += "- **格式特点**：五大板块的组织方式、表格使用\n"
+
+            for i, sample in enumerate(history_samples, 1):
+                samples_section += f"\n### 范文 {i}：{sample.get('title', f'历史纪要 {i}')}\n\n"
+                samples_section += f"{sample['content']}\n"
+                if i < len(history_samples):
+                    samples_section += "---\n"
 
         prompt = f"""你是总裁办资深董秘，负责生成管理层周例会纪要。你的写作风格必须严格模仿用户的写作特点。
 
@@ -190,8 +210,7 @@ class GLMClient:
 ### 6. 特殊表达
 {style_requirements.get('特殊表达', '如果有固定的开场白或结束语，请遵循')}
 
----
-
+{samples_section}
 ## 核心生成要求
 
 ### 1. 必须完整利用历史参考
