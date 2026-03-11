@@ -124,8 +124,8 @@ def _get_available_history_samples() -> List[str]:
         try:
             # GitHub 模式：从仓库读取
             available_files = github_mgr.list_files("历史纪要/")
-            # 过滤出纪要文件
-            available_samples = [f for f in available_files if f.startswith('管理周会纪要') and f.endswith('.md')]
+            # 过滤出纪要文件（只要包含"周会纪要"即可，不限制扩展名）
+            available_samples = [f for f in available_files if "周会纪要" in f]
             print(f"✅ 从 GitHub 获取到 {len(available_samples)} 篇历史纪要")
             return available_samples
         except Exception as e:
@@ -134,7 +134,8 @@ def _get_available_history_samples() -> List[str]:
     # 回退到本地读取
     history_dir = get_project_root() / "reference" / "历史纪要"
     if history_dir.exists():
-        available_samples = [f.name for f in history_dir.glob('管理周会纪要*.md')]
+        # 过滤出纪要文件（只要包含"周会纪要"即可，不限制扩展名）
+        available_samples = [f.name for f in history_dir.glob('*') if "周会纪要" in f]
         print(f"✅ 从本地获取到 {len(available_samples)} 篇历史纪要")
         return available_samples
     else:

@@ -5,7 +5,7 @@ GLM-4 API 客户端
 
 import requests
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 
